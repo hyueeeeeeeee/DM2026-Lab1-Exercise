@@ -104,10 +104,10 @@ def make_tools(session):
 
     @tool
     def inspect_data_tool() -> Dict[str, Any]:
-        """Inspects session.dataframe for data quality anomalies including empty documents, single-word documents, and extreme length outliers using IQR.
+        """Inspects session.dataframe for data quality anomalies including empty documents, single-word documents, and extreme length outliers using IQR, and includes a preview of the loaded data.
 
         Returns:
-            Dict[str, Any]: Summary dictionary containing result_id, total_documents, empty_count, single_word_count, length_outlier_count, total_flagged, flagged_indices, and flagged_preview.
+            Dict[str, Any]: Summary dictionary containing result_id, total_documents, empty_count, single_word_count, length_outlier_count, total_flagged, flagged_indices, flagged_preview, and head_preview.
         """
         if session.dataframe is None:
             return {"status": "error", "message": "No dataframe loaded in session."}
@@ -178,6 +178,25 @@ def make_tools(session):
             rec_preview["text_preview"] = full_txt[:100] + "..." if len(full_txt) > 100 else full_txt
             flagged_preview.append(rec_preview)
 
+        # Build head preview for top 5 loaded rows (showing text truncated to 100 chars and category_name)
+        head_preview = []
+        for idx in df.index[:5]:
+            row = df.loc[idx]
+            raw_text = row.get("text", "")
+            text_str = str(raw_text) if pd.notna(raw_text) else ""
+            truncated_text = text_str[:100] + "..." if len(text_str) > 100 else text_str
+
+            entry = {
+                "index": int(idx),
+                "text": truncated_text
+            }
+            if "category_name" in row:
+                entry["category_name"] = str(row["category_name"])
+            elif "category" in row:
+                entry["category"] = str(row["category"])
+
+            head_preview.append(entry)
+
         result_id = session.next_result_id("inspect_data")
         summary = {
             "result_id": result_id,
@@ -187,7 +206,8 @@ def make_tools(session):
             "length_outlier_count": len(length_outlier_indices),
             "total_flagged": len(all_flagged_indices),
             "flagged_indices": all_flagged_indices[:10],
-            "flagged_preview": flagged_preview
+            "flagged_preview": flagged_preview,
+            "head_preview": head_preview
         }
 
         session.store_result("inspect_data_tool", {}, summary, full_report=full_report)
